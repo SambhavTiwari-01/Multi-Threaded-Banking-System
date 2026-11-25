@@ -1,25 +1,43 @@
 
 package com.banking.config;
 
+import io.github.cdimascio.dotenv.Dotenv;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class DBConnection {
 
-    private static final String URL =
-            "jdbc:mysql://localhost:3306/banking_txn_db";
+    private static final Dotenv dotenv = Dotenv.configure()
+            .ignoreIfMissing()
+            .load();
 
-    private static final String USER = "root";
+    public static Connection getConnection() throws SQLException {
 
-    // Replace with your actual MySQL password
-    private static final String PASSWORD = "Sambhav@2390";
+        String url = dotenv.get("DB_URL");
+        String username = dotenv.get("DB_USERNAME");
+        String password = dotenv.get("DB_PASSWORD");
 
-    public static Connection getConnection()
-            throws SQLException {
+        // Fall back to system environment variables if needed
+        if (url == null) {
+            url = System.getenv("DB_URL");
+        }
 
-        return DriverManager.getConnection(
-                URL, USER, PASSWORD
-        );
+        if (username == null) {
+            username = System.getenv("DB_USERNAME");
+        }
+
+        if (password == null) {
+            password = System.getenv("DB_PASSWORD");
+        }
+
+        if (url == null || username == null || password == null) {
+            throw new SQLException(
+                    "Database configuration missing. Check your .env file."
+            );
+        }
+
+        return DriverManager.getConnection(url, username, password);
     }
 }
