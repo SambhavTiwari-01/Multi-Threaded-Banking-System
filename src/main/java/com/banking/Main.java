@@ -98,27 +98,71 @@
 
 
 
+//package com.banking;
+//
+//import com.banking.service.TransactionService;
+//import java.math.BigDecimal;
+//
+//public class Main {
+//
+//    public static void main(String[] args) {
+//
+//        TransactionService service =
+//                new TransactionService();
+//
+//        try {
+//            service.deposit(
+//                    "TXN1002",
+//                    "ACC2004",
+//                    new BigDecimal("5000.00")
+//            );
+//
+//        } catch (Exception e) {
+//            System.out.println("Error: " + e.getMessage());
+//        }
+//    }
+//}
+
+
+
+
+
+
+
+
+
 package com.banking;
 
 import com.banking.service.TransactionService;
+import com.banking.exception.BankingException;
+
 import java.math.BigDecimal;
 
 public class Main {
 
     public static void main(String[] args) {
 
-        TransactionService service =
-                new TransactionService();
+        TransactionService service = new TransactionService();
 
         try {
-            service.deposit(
-                    "TXN10001",
+
+            // Test withdrawal function
+            service.withdraw(
+                    "TXN10004",
                     "ACC1001",
-                    new BigDecimal("5000.00")
+                    new BigDecimal("7000.00")
             );
 
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
+            // This part Test insufficient balance in an account
+            service.withdraw(
+                    "TXN10005",
+                    "ACC1001",
+                    new BigDecimal("100000.00")
+            );
+
+        } catch (BankingException e) {
+
+            System.out.println("Transaction failed: " + e.getMessage());
         }
     }
 }
