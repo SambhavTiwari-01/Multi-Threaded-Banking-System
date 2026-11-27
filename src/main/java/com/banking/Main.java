@@ -131,6 +131,48 @@
 
 
 
+//package com.banking;
+//
+//import com.banking.service.TransactionService;
+//import com.banking.exception.BankingException;
+//
+//import java.math.BigDecimal;
+//
+//public class Main {
+//
+//    public static void main(String[] args) {
+//
+//        TransactionService service = new TransactionService();
+//
+//        try {
+//
+//            // Test withdrawal function
+//            service.withdraw(
+//                    "TXN10004",
+//                    "ACC1001",
+//                    new BigDecimal("7000.00")
+//            );
+//
+//            // This part Test insufficient balance in an account
+//            service.withdraw(
+//                    "TXN10005",
+//                    "ACC1001",
+//                    new BigDecimal("100000.00")
+//            );
+//
+//        } catch (BankingException e) {
+//
+//            System.out.println("Transaction failed: " + e.getMessage());
+//        }
+//    }
+//}
+
+
+
+
+
+
+
 package com.banking;
 
 import com.banking.service.TransactionService;
@@ -142,27 +184,26 @@ public class Main {
 
     public static void main(String[] args) {
 
-        TransactionService service = new TransactionService();
+        TransactionService transactionService = new TransactionService();
+
+        System.out.println("================================");
+        System.out.println("       FUND TRANSFER TEST");
+        System.out.println("================================");
 
         try {
 
-            // Test withdrawal function
-            service.withdraw(
-                    "TXN10004",
+            transactionService.transfer(
+                    "TXN10009",
                     "ACC1001",
-                    new BigDecimal("7000.00")
-            );
-
-            // This part Test insufficient balance in an account
-            service.withdraw(
-                    "TXN10005",
-                    "ACC1001",
-                    new BigDecimal("100000.00")
+                    "ACC2004",
+                    new BigDecimal("5000.00")
             );
 
         } catch (BankingException e) {
 
-            System.out.println("Transaction failed: " + e.getMessage());
+            System.out.println("Transfer failed: " + e.getMessage());
         }
+
+        System.out.println("\nFund transfer testing completed.");
     }
 }

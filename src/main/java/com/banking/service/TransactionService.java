@@ -374,7 +374,192 @@ public class TransactionService {
 
 
     // ==========================================
-    // 3. COMMON INPUT VALIDATION
+    //  3.FUND TRANSFER METHOD
+   // ==========================================
+
+    public void transfer(String transactionId,
+                         String sourceAccountNumber,
+                         String destinationAccountNumber,
+                         BigDecimal amount) throws BankingException {
+
+        // Validate transaction ID and amount
+        if (transactionId == null || transactionId.isBlank()) {
+            throw new BankingException("Transaction ID cannot be empty");
+        }
+
+        if (sourceAccountNumber == null || sourceAccountNumber.isBlank()
+                || destinationAccountNumber == null
+                || destinationAccountNumber.isBlank()) {
+            throw new BankingException("Account numbers cannot be empty");
+        }
+
+        if (sourceAccountNumber.equalsIgnoreCase(destinationAccountNumber)) {
+            throw new BankingException(
+                    "Source and destination accounts cannot be the same");
+        }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BankingException("Amount must be greater than zero");
+        }
+
+        // Lock both accounts in ascending account_id order
+        String lockSql = """
+            SELECT account_id, account_number, balance, status, currency
+            FROM account
+            WHERE account_number IN (?, ?)
+            ORDER BY account_id
+            FOR UPDATE
+            """;
+
+        String debitSql = """
+            UPDATE account
+            SET balance = balance - ?,
+                version = version + 1
+            WHERE account_id = ?
+            AND balance >= ?
+            """;
+
+        String creditSql = """
+            UPDATE account
+            SET balance = balance + ?,
+                version = version + 1
+            WHERE account_id = ?
+            """;
+
+        String insertSql = """
+            INSERT INTO transaction_record
+            (transaction_id, txn_type, source_account_id,
+             destination_account_id, amount, status, completed_at)
+            VALUES (?, 'TRANSFER', ?, ?, ?, 'SUCCESS', CURRENT_TIMESTAMP(6))
+            """;
+
+        Connection con = null;
+
+        try {
+            con = DBConnection.getConnection();
+            con.setAutoCommit(false);
+
+            // Check duplicate transaction ID
+            checkDuplicateTransaction(con, transactionId);
+
+            long sourceAccountId = -1;
+            long destinationAccountId = -1;
+
+            BigDecimal sourceBalance = null;
+            String sourceCurrency = null;
+            String destinationCurrency = null;
+
+            boolean sourceActive = false;
+            boolean destinationActive = false;
+
+            // Lock and retrieve both accounts
+            try (PreparedStatement ps = con.prepareStatement(lockSql)) {
+
+                ps.setString(1, sourceAccountNumber);
+                ps.setString(2, destinationAccountNumber);
+
+                try (ResultSet rs = ps.executeQuery()) {
+
+                    while (rs.next()) {
+
+                        String accountNumber = rs.getString("account_number");
+
+                        if (accountNumber.equals(sourceAccountNumber)) {
+                            sourceAccountId = rs.getLong("account_id");
+                            sourceBalance = rs.getBigDecimal("balance");
+                            sourceCurrency = rs.getString("currency");
+                            sourceActive = "ACTIVE".equals(rs.getString("status"));
+
+                        } else if (accountNumber.equals(destinationAccountNumber)) {
+                            destinationAccountId = rs.getLong("account_id");
+                            destinationCurrency = rs.getString("currency");
+                            destinationActive = "ACTIVE".equals(rs.getString("status"));
+                        }
+                    }
+                }
+            }
+
+            // Check whether both accounts exist
+            if (sourceAccountId == -1 || destinationAccountId == -1) {
+                throw new BankingException("Source or destination account not found");
+            }
+
+            // Check account status
+            if (!sourceActive || !destinationActive) {
+                throw new BankingException("Both accounts must be ACTIVE");
+            }
+
+            // Check currency compatibility
+            if (!sourceCurrency.equals(destinationCurrency)) {
+                throw new BankingException(
+                        "Transfers between different currencies are not supported");
+            }
+
+            // Check sufficient balance
+            if (sourceBalance.compareTo(amount) < 0) {
+                throw new BankingException("Insufficient account balance");
+            }
+
+            // Debit money from source account
+            try (PreparedStatement ps = con.prepareStatement(debitSql)) {
+
+                ps.setBigDecimal(1, amount);
+                ps.setLong(2, sourceAccountId);
+                ps.setBigDecimal(3, amount);
+
+                if (ps.executeUpdate() != 1) {
+                    throw new BankingException("Source account debit failed");
+                }
+            }
+
+            // Credit money to destination account
+            try (PreparedStatement ps = con.prepareStatement(creditSql)) {
+
+                ps.setBigDecimal(1, amount);
+                ps.setLong(2, destinationAccountId);
+
+                if (ps.executeUpdate() != 1) {
+                    throw new BankingException("Destination account credit failed");
+                }
+            }
+
+            // Record the transfer
+            try (PreparedStatement ps = con.prepareStatement(insertSql)) {
+
+                ps.setString(1, transactionId);
+                ps.setLong(2, sourceAccountId);
+                ps.setLong(3, destinationAccountId);
+                ps.setBigDecimal(4, amount);
+
+                ps.executeUpdate();
+            }
+
+            // Commit both balance updates together
+            con.commit();
+
+            System.out.println("Fund transfer successful!");
+            System.out.println("Transaction ID: " + transactionId);
+            System.out.println("From Account: " + sourceAccountNumber);
+            System.out.println("To Account: " + destinationAccountNumber);
+            System.out.println("Amount: Rs. " + amount);
+
+        } catch (BankingException e) {
+
+            rollback(con);
+            throw e;
+
+        } catch (SQLException e) {
+
+            rollback(con);
+            throw new BankingException(
+                    "Fund transfer failed: " + e.getMessage());
+
+        } finally {
+            closeConnection(con);
+        }
+    }
+    // ==========================================
+    // 4. COMMON INPUT VALIDATION
     // ==========================================
 
     private void validateInput(String transactionId,
@@ -399,7 +584,7 @@ public class TransactionService {
 
 
     // ==========================================
-    // 4. CHECK DUPLICATE TRANSACTION ID
+    // 5. CHECK DUPLICATE TRANSACTION ID
     // ==========================================
 
     private void checkDuplicateTransaction(Connection con,
@@ -428,7 +613,7 @@ public class TransactionService {
 
 
     // ==========================================
-    // 5. ROLLBACK METHOD
+    // 6. ROLLBACK METHOD
     // ==========================================
 
     private void rollback(Connection con) {
@@ -448,7 +633,7 @@ public class TransactionService {
 
 
     // ==========================================
-    // 6. CLOSE DATABASE CONNECTION
+    // 7. CLOSE DATABASE CONNECTION
     // ==========================================
 
     private void closeConnection(Connection con) {
